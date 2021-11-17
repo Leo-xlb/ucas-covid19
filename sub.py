@@ -47,6 +47,8 @@ if os.environ.get('GITHUB_RUN_ID', None):
     user = os.environ.get('SEP_USER_NAME', '')  # sep账号
     passwd = os.environ.get('SEP_PASSWD', '')  # sep密码
     api_key = os.environ.get('API_KEY', '')  # server酱的api，填了可以微信通知打卡结果，不填没影响
+    corp_id = os.environ.get('CORP_ID', '')  # 企业微信corp id
+    corp_secret = os.environ.get('CORP_SECRET', '')  # 企业微信corp secret
 
     smtp_port = os.environ.get('SMTP_PORT', '465')  # 邮件服务器端口，默认为qq smtp服务器端口
     smtp_server = os.environ.get('SMTP_SERVER', 'smtp.qq.com')  # 邮件服务器，默认为qq smtp服务器
@@ -221,6 +223,8 @@ def message(key, sender, mail_passwd, receiver, bot_token, chat_id, subject, msg
         send_email(sender, mail_passwd, receiver, subject, msg)
     if tg_bot_token != "" and tg_chat_id != "":
         send_telegram_message(bot_token, chat_id, "{}\n{}".format(subject, msg))
+    if corp_id != "":
+        send_enterprise_wechat(corp_id, corp_secret, msg)
 
 
 def server_chan_message(key, title, body):
@@ -267,7 +271,18 @@ def send_telegram_message(bot_token, chat_id, msg):
     import telegram 
     bot = telegram.Bot(token=bot_token)
     bot.send_message(chat_id=chat_id, text=msg)
+    
 
+def send_enterprise_wechat(corp_id, corp_secret, msg):
+    """
+    企业微信通知打卡结果
+    """
+    get_access_token_url = \
+        "https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid={}&corpsecret={}".format(corp_id, corp_secret)
+    access_token = json.loads(requests.get(get_access_token_url).text)["access_token"]
+    msg_url = "https://qyapi.weixin.qq.com/cgi-bin/message/send?access_token={}".format(access_token)
+    requests.post(msg_url, json=msg)
+    
 
 def report(username, password):
     s = requests.Session()
