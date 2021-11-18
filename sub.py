@@ -17,7 +17,6 @@ from email.utils import formataddr
 from email.mime.text import MIMEText
 from requests.adapters import HTTPAdapter
 
-
 # 开启debug将会输出打卡填报的数据，关闭debug只会输出打卡成功或者失败，如果使用github actions，请务必设置该选项为False
 debug = False
 
@@ -40,6 +39,11 @@ receiver_email = ""
 tg_chat_id = ""  # 和bot的chat_id
 tg_bot_token = r""  # bot的token
 
+# 可选，如果需要企业微信通知，修改下面
+corp_id = ""
+corp_secret = ""
+corp_agent_id = ""
+
 # 全局变量，使用自己的服务器运行请根据需要修改 ->以上变量<-
 
 # 如果检测到程序在 github actions 内运行，那么读取环境变量中的登录信息
@@ -49,6 +53,7 @@ if os.environ.get('GITHUB_RUN_ID', None):
     api_key = os.environ.get('API_KEY', '')  # server酱的api，填了可以微信通知打卡结果，不填没影响
     corp_id = os.environ.get('CORP_ID', '')  # 企业微信corp id
     corp_secret = os.environ.get('CORP_SECRET', '')  # 企业微信corp secret
+    corp_agent_id = os.environ.get('CORP_AGENT_ID', '') # 企业微信agent id
 
     smtp_port = os.environ.get('SMTP_PORT', '465')  # 邮件服务器端口，默认为qq smtp服务器端口
     smtp_server = os.environ.get('SMTP_SERVER', 'smtp.qq.com')  # 邮件服务器，默认为qq smtp服务器
@@ -56,7 +61,7 @@ if os.environ.get('GITHUB_RUN_ID', None):
     sender_email_passwd = os.environ.get('SENDER_EMAIL_PASSWD', "")  # 发送通知打卡通知邮件的邮箱密码
     receiver_email = os.environ.get('RECEIVER_EMAIL', '')  # 接收打卡通知邮件的邮箱
 
-    tg_chat_id = os.environ.get('TG_CHAT_ID', '')  # 和bot的chat_id
+    tg_chat_id = os.environ.get('TG_CHAT_ID', '')  # telegram bot的chat_id
     tg_bot_token = os.environ.get('TG_BOT_TOKEN', '')  # bot的token
 
 
@@ -224,7 +229,7 @@ def message(key, sender, mail_passwd, receiver, bot_token, chat_id, subject, msg
     if tg_bot_token != "" and tg_chat_id != "":
         send_telegram_message(bot_token, chat_id, "{}\n{}".format(subject, msg))
     if corp_id != "":
-        send_enterprise_wechat(corp_id, corp_secret, msg)
+        send_enterprise_wechat(corp_id, corp_secret, corp_agent_id, subject, msg)
 
 
 def server_chan_message(key, title, body):
@@ -268,21 +273,37 @@ def send_telegram_message(bot_token, chat_id, msg):
     此处使用时再导入以保证向后兼容 python 3.5；
     如果要使用 tg 消息通知，请使用 python 3.6或更高的版本
     """
-    import telegram 
+    import telegram
     bot = telegram.Bot(token=bot_token)
     bot.send_message(chat_id=chat_id, text=msg)
-    
 
-def send_enterprise_wechat(corp_id, corp_secret, msg):
+
+def send_enterprise_wechat(corp_id, corp_secret, corp_agent_id, title, body):
     """
     企业微信通知打卡结果
     """
+    enterprise_wechat_msg = {
+        "touser": "@all",
+        "toparty": "",
+        "totag": "",
+        "msgtype": "textcard",
+        "agentid": corp_agent_id,
+        "text": {
+            "title": title,
+            "content": body,
+            "URL": "https://www.baidu.com"
+        },
+        "safe": 0,
+        "enable_id_trans": 0,
+        "enable_duplicate_check": 0,
+        "duplicate_check_interval": 1800
+    }
     get_access_token_url = \
         "https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid={}&corpsecret={}".format(corp_id, corp_secret)
     access_token = json.loads(requests.get(get_access_token_url).text)["access_token"]
     msg_url = "https://qyapi.weixin.qq.com/cgi-bin/message/send?access_token={}".format(access_token)
-    requests.post(msg_url, json=msg)
-    
+    requests.post(msg_url, json=enterprise_wechat_msg)
+
 
 def report(username, password):
     s = requests.Session()
